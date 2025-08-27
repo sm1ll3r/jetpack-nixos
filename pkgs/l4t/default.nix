@@ -26,6 +26,7 @@
 , l4tOlder
 , cudaPackages
 , cudaDriverMajorMinorVersion
+, gcc
 }:
 let
   # Wrapper around mkDerivation that has some sensible defaults to extract a .deb file from the L4T BSP pacckage
@@ -112,11 +113,31 @@ let
 
   l4t-camera = buildFromDeb {
     name = "nvidia-l4t-camera";
-    buildInputs = [ stdenv.cc.cc.lib l4t-core l4t-multimedia gtk3 ];
+    buildInputs = [ stdenv.cc.cc.lib l4t-core l4t-multimedia gtk3 makeWrapper ];
 
     postPatch = ''
       ln -srfv lib/libv4l2_nvargus.so lib/libv4l/plugins/nv/libv4l2_nvargus.so
     '';
+
+    preFixup = ''
+      #patchelf lib/libnvscf.so --add-rpath ${dlopen-override}
+      postFixupHooks+=('
+        current_rpath=$(patchelf --print-rpath $out/lib/libnvscf.so)
+        new_rpath="${dlopen-override}/lib:''${current_rpath}"
+        patchelf --set-rpath "''${new_rpath}" $out/lib/libnvscf.so
+
+        # patchelf --add-rpath ${dlopen-override}/lib $out/lib/libnvscf.so
+        patchelf --add-needed ${dlopen-override}/lib/dlopen-override.so $out/lib/libnvscf.so
+      ')
+    '';
+    # postFixup = ''
+    #   for exe in $out/bin/*; do
+    #     wrapProgram $exe \
+    #       --set LD_PRELOAD ${dlopen-override}/lib/dlopen-override.so
+    #   done
+    # '';     
+    
+    # libnvscf
   };
 
   l4t-core = buildFromDeb {
@@ -288,6 +309,23 @@ let
     autoPatchelf = false;
   };
 
+  dlopen-override = stdenv.mkDerivation {
+    pname = "dlopen-override";
+    version = "1.0";
+    src = ./dlopen;
+
+    buildInputs = [ gcc ];
+
+    buildPhase = ''
+      gcc -shared -fPIC -o dlopen-override.so dlopenoveride.c -ldl
+    '';
+
+    installPhase = ''
+      mkdir -p $out/lib
+      cp dlopen-override.so $out/lib/
+    '';
+  };
+
   # Nvidia's included libv4l has very minimal changes against the upstream
   # version. We need to rebuild it from source to ensure it can find nvidia's
   # v4l plugins in the right location. Nvidia's version has the path hardcoded.
@@ -434,6 +472,7 @@ let
 in
 {
   inherit
+    dlopen-override
     ### Debs from L4T BSP
     l4t-3d-core
     l4t-camera

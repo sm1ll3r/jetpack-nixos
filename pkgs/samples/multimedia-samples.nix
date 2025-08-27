@@ -4,6 +4,7 @@
 , cudaPackages
 , debs
 , dpkg
+, dlopen-override
 , fetchurl
 , l4t-camera
 , l4t-cuda
@@ -12,6 +13,7 @@
 , lib
 , libdrm
 , libglvnd
+, makeWrapper
 , opencv
 , pango
 , python3
@@ -43,12 +45,14 @@ stdenv.mkDerivation {
   buildInputs = [
     cairo
     cudatoolkit
+    dlopen-override
     l4t-camera
     l4t-cuda
     l4t-multimedia
     libdrm
     libglvnd
     libX11
+    makeWrapper
     opencv
     pango
     tensorrt
@@ -105,6 +109,9 @@ stdenv.mkDerivation {
         --add-needed libpango-1.0.so.0 \
         --add-needed libpangocairo-1.0.so.0 \
         "$exe"
+      
+      # wrapProgram $exe \
+      #   --set LD_PRELOAD ${dlopen-override}/lib/dlopen-override.so
     done
     unset -v exe
 
